@@ -1,0 +1,7 @@
+bentoml
+pandas
+lightgbm
+scikit-learn
+mlflow
+boto3
+numpy

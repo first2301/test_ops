@@ -1,0 +1,10 @@
+pandas
+lightgbm
+scikit-learn
+jupyter
+jupyterlab
+notebook 
+ipykernel
+mlflow
+minio
+boto3

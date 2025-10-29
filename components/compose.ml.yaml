@@ -1,0 +1,36 @@
+name: xops
+
+networks:
+  xops-net:
+    external: true
+
+services:
+  train:
+    build:
+      context: ./train
+      dockerfile: Dockerfile.train
+    env_file:
+      - ./train/.env.train
+    volumes:
+      - ./train:/app
+    working_dir: /app
+    ports:
+      - "8888:8888"
+    networks:
+      - xops-net
+    restart: unless-stopped
+
+  deploy:
+    build:
+      context: ./deploy
+      dockerfile: Dockerfile.deploy
+    env_file:
+      - ./deploy/.env.deploy
+    volumes:
+      - ./deploy:/app
+    working_dir: /app
+    ports:
+      - "8000:8000"
+    networks:
+      - xops-net
+    restart: unless-stopped
