@@ -1,0 +1,6 @@
+outs:
+- md5: 0c2f34e4a2017e4867a3bde3e61b2f91.dir
+  size: 11051847
+  nfiles: 6
+  hash: md5
+  path: data_prepro

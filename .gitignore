@@ -1,7 +1,6 @@
 .env
 .venv
 data_raw
-data
 data_prepro
 *.pkl
 *.csv
