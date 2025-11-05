@@ -1,4 +1,4 @@
 
 
 - airflow
-: echo -e "AIRFLOW_UID=$(id -u)" > .env
+echo -e "AIRFLOW_UID=$(id -u)" > .env

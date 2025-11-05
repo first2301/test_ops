@@ -1,11 +1,11 @@
-name: xops
+name: xops-mlflow
 volumes:
   pgdata:
   minio-data:
 services:
   postgres:
     image: postgres:15
-    container_name: mlflow-postgres
+    container_name: postgres
     env_file:
       - .env.mlflow
     environment:
