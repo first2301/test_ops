@@ -1,142 +1,95 @@
 from airflow.sdk import DAG, task
 import pendulum
 from datetime import timedelta
-import subprocess
-import os
 
 
 default_args = {
     'owner': 'airflow',
-    'retries': 1,
-    'retry_delay': timedelta(minutes=1),
+    'retries': 2,  # 백업은 재시도 중요
+    'retry_delay': timedelta(minutes=5),
 }
 
 with DAG(
-    dag_id='dags_dataops_by_dvc',
-    description='DVC를 사용하여 데이터 파이프라인 관리',
+    dag_id='dags_dataops_backup',
+    description='백업 파이프라인: 변경된 데이터만 자동 백업',
     start_date=pendulum.datetime(2025, 11, 5),
-    schedule="@daily",
-    tags=['dvc', 'dataops']
+    schedule="@daily",  # 매일 실행
+    tags=['dvc', 'backup', 'dataops']
 ) as dag:
 
     @task.virtualenv(
-        task_id="dvc_pull_data",
+        task_id="backup_data",
         requirements=['dvc']
     )
-    def dvc_pull_data():
-        """DVC 원격 저장소에서 데이터 가져오기"""
+    def backup_data():
+        """변경된 데이터 자동 감지 및 백업"""
         import subprocess
         import os
-        
-        # 프로젝트 루트 디렉토리로 이동 (필요시)
-        project_root = os.getenv('AIRFLOW_HOME', '/opt/airflow')
-        os.chdir(project_root)
-        
-        try:
-            result = subprocess.run(
-                ['dvc', 'pull'],
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            print(f"DVC pull 성공: {result.stdout}")
-            return {"status": "success", "message": result.stdout}
-        except subprocess.CalledProcessError as e:
-            print(f"DVC pull 실패: {e.stderr}")
-            raise
-
-
-    @task.virtualenv(
-        task_id="dvc_add_data",
-        requirements=['dvc']
-    )
-    def dvc_add_data():
-        """변경된 데이터 파일을 DVC에 추가"""
-        import subprocess
-        import os
+        from datetime import datetime
         
         project_root = os.getenv('AIRFLOW_HOME', '/opt/airflow')
         os.chdir(project_root)
         
-        data_files = [
-            "test/test2.txt",
-            "test/test3.txt",
-            "test/test.txt"
+        # 백업 대상 디렉토리 (실제 데이터 경로)
+        backup_targets = [
+            "data/data_raw",      # 원본 데이터
+            "data/data_prepro",   # 전처리 데이터
         ]
         
-        results = []
-        failed_files = []
-        missing_files = []
+        backup_stats = {
+            "timestamp": datetime.now().isoformat(),
+            "backed_up": [],
+            "skipped": [],
+            "failed": []
+        }
         
-        for file_path in data_files:
-            if os.path.exists(file_path):
-                try:
-                    result = subprocess.run(
-                        ['dvc', 'add', file_path],
+        for target in backup_targets:
+            if not os.path.exists(target):
+                backup_stats["skipped"].append(f"{target} (not found)")
+                print(f"백업 대상 없음: {target}")
+                continue
+            
+            try:
+                # 1. DVC add (변경사항만 자동 감지)
+                add_result = subprocess.run(
+                    ['dvc', 'add', target],
+                    capture_output=True,
+                    text=True,
+                    check=False  # 변경사항 없으면 에러 발생 가능
+                )
+                
+                if add_result.returncode == 0:
+                    # 변경사항이 있어서 추가됨 → push 수행
+                    push_result = subprocess.run(
+                        ['dvc', 'push'],
                         capture_output=True,
                         text=True,
                         check=True
                     )
-                    print(f"DVC add 성공 ({file_path}): {result.stdout}")
-                    results.append({"file": file_path, "status": "success"})
-                except subprocess.CalledProcessError as e:
-                    print(f"DVC add 실패 ({file_path}): {e.stderr}")
-                    results.append({"file": file_path, "status": "failed", "error": e.stderr})
-                    failed_files.append(file_path)
-            else:
-                print(f"파일이 존재하지 않습니다: {file_path}")
-                results.append({"file": file_path, "status": "not_found"})
-                missing_files.append(file_path)
+                    backup_stats["backed_up"].append(target)
+                    print(f"✓ 백업 완료: {target}")
+                else:
+                    # 변경사항 없음 (정상 케이스)
+                    backup_stats["skipped"].append(f"{target} (no changes)")
+                    print(f"- 변경사항 없음: {target}")
+                    
+            except subprocess.CalledProcessError as e:
+                backup_stats["failed"].append(f"{target}: {str(e)}")
+                print(f"✗ 백업 실패: {target}")
+                # 백업 실패는 경고만 (전체 파이프라인 중단 방지)
         
-        # DVC add 명령어가 실패한 경우 exception을 raise하여 task를 실패로 표시
-        # (다른 함수들과 일관성 유지: dvc_pull_data, dvc_push_data는 실패 시 raise)
-        if failed_files:
-            error_msg = f"DVC add 실패: {len(failed_files)}개 파일 처리 실패 - {', '.join(failed_files)}"
-            print(error_msg)
-            raise Exception(error_msg)
+        # 백업 결과 요약
+        print(f"\n=== 백업 결과 ===")
+        print(f"백업 완료: {len(backup_stats['backed_up'])}개")
+        print(f"변경사항 없음: {len(backup_stats['skipped'])}개")
+        print(f"실패: {len(backup_stats['failed'])}개")
         
-        # 모든 파일이 없는 경우도 실패로 처리 (데이터가 전혀 없는 경우)
-        if missing_files and not results:
-            error_msg = f"DVC add 실패: 모든 파일이 존재하지 않음 - {', '.join(missing_files)}"
-            print(error_msg)
-            raise Exception(error_msg)
+        # 실패가 있으면 경고만 출력 (파이프라인은 성공으로 처리)
+        if backup_stats["failed"]:
+            print(f"경고: {len(backup_stats['failed'])}개 백업 실패")
         
-        # 일부 파일만 없는 경우는 경고만 출력하고 계속 진행
-        if missing_files:
-            print(f"경고: {len(missing_files)}개 파일이 존재하지 않지만 계속 진행합니다: {', '.join(missing_files)}")
-        
-        return {"results": results}
+        return backup_stats
 
 
-    @task.virtualenv(
-        task_id="dvc_push_data",
-        requirements=['dvc']
-    )
-    def dvc_push_data():
-        """DVC 원격 저장소에 데이터 업로드"""
-        import subprocess
-        import os
-        
-        project_root = os.getenv('AIRFLOW_HOME', '/opt/airflow')
-        os.chdir(project_root)
-        
-        try:
-            result = subprocess.run(
-                ['dvc', 'push'],
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            print(f"DVC push 성공: {result.stdout}")
-            return {"status": "success", "message": result.stdout}
-        except subprocess.CalledProcessError as e:
-            print(f"DVC push 실패: {e.stderr}")
-            raise
-
-
-    # Task 의존성 설정: pull -> add -> push 순서로 실행
-    pull_result = dvc_pull_data()
-    add_result = dvc_add_data()
-    push_result = dvc_push_data()
-    
-    pull_result >> add_result >> push_result
+    # 단일 태스크로 간단하게 구성
+    backup_result = backup_data()
