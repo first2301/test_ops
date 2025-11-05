@@ -5,3 +5,4 @@ data
 data_prepro
 *.pkl
 *.csv
+/test2.txt
