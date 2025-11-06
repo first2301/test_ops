@@ -10,11 +10,11 @@ default_args = {
 }
 
 with DAG(
-    dag_id='dataops_preprocess_minio',
-    description='MinIO에서 원본 데이터를 읽어 전처리 후 저장하는 데이터 파이프라인',
+    dag_id='dag_data_integration',
+    description='MinIO에서 원본 데이터를 읽어 데이터 통합 후 저장하는 데이터 파이프라인',
     start_date=pendulum.datetime(2025, 11, 4),
     schedule="@daily",
-    tags=['dataops', 'minio', 'preprocessing']
+    tags=['dataops', 'minio', 'data_integration']
 ) as dag:
 
     @task.virtualenv(

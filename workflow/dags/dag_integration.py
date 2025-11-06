@@ -10,11 +10,11 @@ default_args = {
 }
 
 with DAG(
-    dag_id='dataops_preprocess_minio',
-    description='MinIO에서 원본 데이터를 읽어 전처리 후 저장하는 데이터 파이프라인',
+    dag_id='dag_data_integration',
+    description='MinIO에서 원본 데이터를 읽어 데이터 통합 후 저장하는 데이터 파이프라인',
     start_date=pendulum.datetime(2025, 11, 4),
     schedule="@daily",
-    tags=['dataops', 'minio', 'preprocessing']
+    tags=['data_integration']
 ) as dag:
 
     @task.virtualenv(
@@ -28,12 +28,7 @@ with DAG(
         minio_endpoint = 'minio:9000'
         minio_access_key = 'minio'
         minio_secret_key = 'minio123'
-        # minio_bucket = 'raw'
-        # minio_object = 'restaurant_2021.csv'
-
         minio_bucket = "raw"
-        # minio_object = "restaurant"
-        years = ['2020', '2021', '2022', '2023', '2024', '2025']
         dfs = []
 
         client = Minio(
@@ -42,24 +37,33 @@ with DAG(
             secret_key=minio_secret_key,
             secure=False
         )
-        for year in years:
-            object_name = f"restaurant_{year}.csv"
-            response = client.get_object(minio_bucket, object_name)
-            data_stream = BytesIO(response.read())
-            df_temp = pd.read_csv(data_stream)
-            dfs.append(df_temp)
-            response.close()
-            response.release_conn()
+        
+        # 버킷의 모든 객체 나열
+        objects = client.list_objects(minio_bucket, recursive=True)
+        
+        # CSV 파일만 필터링하여 읽기
+        for obj in objects:
+            object_name = obj.object_name
+            # CSV 파일만 처리
+            if object_name.endswith('.csv'):
+                try:
+                    response = client.get_object(minio_bucket, object_name)
+                    data_stream = BytesIO(response.read())
+                    df_temp = pd.read_csv(data_stream)
+                    dfs.append(df_temp)
+                    print(f"읽은 파일: {object_name}, 행 수: {len(df_temp)}")
+                    response.close()
+                    response.release_conn()
+                except Exception as e:
+                    print(f"파일 읽기 실패 {object_name}: {str(e)}")
+                    continue
 
+        if not dfs:
+            raise ValueError("읽을 수 있는 CSV 파일이 없습니다.")
+        
         df = pd.concat(dfs, ignore_index=True)
-        print(f"row: {len(df)} / columns{df.columns}")
+        print(f"전체 행 수: {len(df)} / 컬럼: {df.columns.tolist()}")
         print(df.head())
-        # response = client.get_object(minio_bucket, minio_object)
-        # df = pd.read_csv(BytesIO(response.read()))
-        # print(len(df))
-        # print(df.head())
-        # response.close()
-        # response.release_conn()
         return df
 
 
@@ -74,7 +78,7 @@ with DAG(
         minio_access_key = 'minio'
         minio_secret_key = 'minio123'
         minio_bucket = "prepro"
-        minio_object = "prepro_data.csv"
+        minio_object = "prepro_data2.csv"
         client = Minio(
             minio_endpoint,
             access_key=minio_access_key,
