@@ -15,7 +15,7 @@ services:
       - ./deploy:/app
     working_dir: /app
     ports:
-      - "8000:8000"
+      - "8007:8000"
     networks:
       - xops-net
     restart: unless-stopped
