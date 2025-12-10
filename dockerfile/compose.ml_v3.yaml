@@ -20,18 +20,17 @@ services:
       - xops-net
     restart: unless-stopped
 
-
-    train:
-      build:
-        context: ./train
-        dockerfile: Dockerfile.train
-      env_file:
-        - ./train/.env.train
-      volumes:
-        - ./train:/app
-      working_dir: /app
-      ports:
-        - "8888:8888"
-      networks:
-        - xops-net
-      restart: unless-stopped
+  train:
+    build:
+      context: ./train
+      dockerfile: Dockerfile.train
+    env_file:
+      - ./train/.env.train
+    volumes:
+      - ./train:/app
+    working_dir: /app
+    ports:
+      - "8888:8888"
+    networks:
+      - xops-net
+    restart: unless-stopped

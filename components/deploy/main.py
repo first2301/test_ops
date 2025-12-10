@@ -96,6 +96,10 @@ class PredictResponse(BaseModel):
     predictions_label: List[str]
 
 
+@app.get("/")
+def read_root():
+    return {"message": "predict service is running"}
+
 # 엔드포인트 정의
 @app.post(
     "/predict",
