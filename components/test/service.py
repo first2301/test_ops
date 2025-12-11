@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 MODEL_PATH = os.getenv("MODEL_PATH", "./model.pkl")
 ENCODER_PATH = os.getenv("ENCODER_PATH", "./encoders.pkl")
 # BentoML 모델 태그 (환경변수로 override 가능)
-BENTOML_MODEL_TAG = os.getenv("BENTOML_MODEL_TAG", None)
+BENTOML_MODEL_TAG = os.getenv("BENTOML_MODEL_TAG", "latest")
 
 # 실제 학습 시 숫자형 컬럼만 사용
 EXPECTED_FEATURES = ['번지_숫자', '시도_encoded', '시군구_encoded', '읍면동_encoded', '구분_encoded']
@@ -160,7 +160,7 @@ class RestaurantClassifier:
         
         return input_df
     
-    @bentoml.api(batchable=True)
+    @bentoml.api(batchable=False)
     def predict(
         self, 
         data: List[InputData]
